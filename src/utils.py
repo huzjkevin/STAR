@@ -10,7 +10,8 @@ DATASET_NAME_TO_NUM = {
     'hotel': 1,
     'zara1': 2,
     'zara2': 3,
-    'univ': 4
+    'univ': 4,
+    'trajectory_combined': 5
 }
 
 
@@ -47,8 +48,23 @@ class Trajectory_Dataloader():
             self.test_dir = [self.data_dirs[x] for x in self.test_set]
             self.trainskip = [skip[x] for x in train_set]
             self.testskip = [skip[x] for x in self.test_set]
-        else:
-            raise NotImplementedError
+
+        elif self.args.dataset == "trajectory_combined":
+            self.data_dirs = ['./data/trajectory_combined/train']
+            
+
+            # Data directory where the pre-processed pickle file resides
+            train_dir = f'./data/{args.dataset}/train'
+            all_train_files = os.listdir(train_dir)
+            all_train_files = [os.path.join(train_dir, _path) for _path in all_train_files]
+            test_dir = f'./data/{args.dataset}/test'
+            all_test_files = os.listdir(test_dir)
+            all_test_files = [os.path.join(test_dir, _path) for _path in all_test_files]
+
+            self.train_dir = all_train_files
+            self.test_dir = all_test_files
+            self.trainskip = [1 for _ in range(len(all_train_files))]
+            self.testskip = [1 for _ in range(len(all_test_files))]
 
         self.train_data_file = os.path.join(self.args.save_dir, "train_trajectories.cpkl")
         self.test_data_file = os.path.join(self.args.save_dir, "test_trajectories.cpkl")
@@ -100,10 +116,15 @@ class Trajectory_Dataloader():
         pedtrajec_dict = []  # trajectories of a certain ped
         # For each dataset
         for seti, directory in enumerate(data_dirs):
+            if self.args.dataset == 'trajectory_combined':
+                file_path = directory
+                delim = '\t'
+            else:
+                file_path = os.path.join(directory, 'true_pos_.csv')
+                delim = ','
 
-            file_path = os.path.join(directory, 'true_pos_.csv')
             # Load the data from the csv file
-            data = np.genfromtxt(file_path, delimiter=',')
+            data = np.genfromtxt(file_path, delimiter=delim).T
             # Frame IDs of the frames in the current dataset
 
             Pedlist = np.unique(data[1, :]).tolist()
