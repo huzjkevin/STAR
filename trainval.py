@@ -45,6 +45,8 @@ def get_parser():
     parser.add_argument('--neighbor_thred', default=10, type=int)
     parser.add_argument('--learning_rate', default=0.0015, type=float)
     parser.add_argument('--clip', default=1, type=int)
+    parser.add_argument("--factor", type=float, default=1.0)
+    parser.add_argument("--warmup", type=int, default=10)
 
     return parser
 
