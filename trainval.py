@@ -15,12 +15,12 @@ torch.manual_seed(0)
 
 def get_parser():
     parser = argparse.ArgumentParser(description='STAR')
-    parser.add_argument('--dataset', default='trajectory_combined')
+    parser.add_argument('--dataset', default='trajectory_combined_cls')
     parser.add_argument('--save_dir')
     parser.add_argument('--model_dir')
     parser.add_argument('--config')
     parser.add_argument('--using_cuda', default=True, type=ast.literal_eval)
-    parser.add_argument('--test_set', default='trajectory_combined', type=str,
+    parser.add_argument('--test_set', default='trajectory_combined_cls', type=str,
                         help='Set this value to [trajectory_combined, eth, hotel, zara1, zara2, univ] for ETH-univ, ETH-hotel, UCY-zara01, UCY-zara02, UCY-univ')
     parser.add_argument('--base_dir', default='.', help='Base directory including these scripts.')
     parser.add_argument('--save_base_dir', default='./output/', help='Directory for saving caches and models.')

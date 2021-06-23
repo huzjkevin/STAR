@@ -49,8 +49,8 @@ class Trajectory_Dataloader():
             self.trainskip = [skip[x] for x in train_set]
             self.testskip = [skip[x] for x in self.test_set]
 
-        elif self.args.dataset == "trajectory_combined":
-            self.data_dirs = ['./data/trajectory_combined/train']
+        elif self.args.dataset == "trajectory_combined" or self.args.dataset == "trajectory_combined_cls":
+            self.data_dirs = [f'./data/{self.args.dataset}/train']
             
 
             # Data directory where the pre-processed pickle file resides
@@ -116,15 +116,18 @@ class Trajectory_Dataloader():
         pedtrajec_dict = []  # trajectories of a certain ped
         # For each dataset
         for seti, directory in enumerate(data_dirs):
-            if self.args.dataset == 'trajectory_combined':
+            if self.args.dataset == 'trajectory_combined' or self.args.dataset == "trajectory_combined_cls":
                 file_path = directory
                 delim = '\t'
+                # Load the data from the csv file
+                data = np.genfromtxt(file_path, delimiter=delim).T
             else:
                 file_path = os.path.join(directory, 'true_pos_.csv')
                 delim = ','
+                # Load the data from the csv file
+                data = np.genfromtxt(file_path, delimiter=delim)
 
-            # Load the data from the csv file
-            data = np.genfromtxt(file_path, delimiter=delim).T
+            
             # Frame IDs of the frames in the current dataset
 
             Pedlist = np.unique(data[1, :]).tolist()
@@ -156,10 +159,11 @@ class Trajectory_Dataloader():
 
                 for fi, frame in enumerate(FrameList):
                     # Extract their x and y positions
-                    current_x = FrameContainPed[3, FrameContainPed[0, :] == frame][0]
-                    current_y = FrameContainPed[2, FrameContainPed[0, :] == frame][0]
+                    current_x = FrameContainPed[2, FrameContainPed[0, :] == frame][0]
+                    current_y = FrameContainPed[3, FrameContainPed[0, :] == frame][0]
+                    current_cls = FrameContainPed[4, FrameContainPed[0, :] == frame][0]
                     # Add their pedID, x, y to the row of the numpy array
-                    Trajectories.append([int(frame), current_x, current_y])
+                    Trajectories.append([int(frame), current_x, current_y, current_cls])
                     if int(frame) not in frameped_dict[seti]:
                         frameped_dict[seti][int(frame)] = []
                     frameped_dict[seti][int(frame)].append(pedi)
@@ -288,7 +292,7 @@ class Trajectory_Dataloader():
                     # filter trajectories have too few frame data
                     continue
 
-                cur_trajec = (cur_trajec[:, 1:].reshape(-1, 1, 2),)
+                cur_trajec = (cur_trajec[:, 1:].reshape(-1, 1, cur_trajec.shape[1] - 1),)
                 traject = traject.__add__(cur_trajec)
                 IFfull.append(iffull)
             if traject.__len__() < 1:
@@ -354,7 +358,7 @@ class Trajectory_Dataloader():
         '''
         Query the trajectory fragment based on the index. Replace where data isn't exsist with 0.
         '''
-        return_trajec = np.zeros((seq_length, 3))
+        return_trajec = np.zeros((seq_length, trajectory.shape[1]))
         endframe = startframe + (seq_length) * skip
         start_n = np.where(trajectory[:, 0] == startframe)
         end_n = np.where(trajectory[:, 0] == endframe)
@@ -384,7 +388,7 @@ class Trajectory_Dataloader():
 
         offset_end = self.args.seq_length + int((candidate_seq[-1, 0] - endframe) // skip)
 
-        return_trajec[offset_start:offset_end + 1, :3] = candidate_seq
+        return_trajec[offset_start:offset_end + 1, :] = candidate_seq
 
         if return_trajec[self.args.obs_length - 1, 1] != 0:
             ifexsitobs = True
@@ -403,7 +407,7 @@ class Trajectory_Dataloader():
             num_Peds += batch.shape[1]
 
         seq_list_b = np.zeros((self.args.seq_length, 0))
-        nodes_batch_b = np.zeros((self.args.seq_length, 0, 2))
+        nodes_batch_b = np.zeros((self.args.seq_length, 0, 3))
         nei_list_b = np.zeros((self.args.seq_length, num_Peds, num_Peds))
         nei_num_b = np.zeros((self.args.seq_length, num_Peds))
         num_Ped_h = 0
@@ -463,7 +467,7 @@ class Trajectory_Dataloader():
         Random ration and zero shifting.
         '''
         batch, seq_list, nei_list, nei_num, batch_pednum = batch_data
-
+        
         # rotate batch
         if ifrotate:
             th = random.random() * np.pi
@@ -471,11 +475,14 @@ class Trajectory_Dataloader():
             batch[:, :, 0] = cur_ori[:, :, 0] * np.cos(th) - cur_ori[:, :, 1] * np.sin(th)
             batch[:, :, 1] = cur_ori[:, :, 0] * np.sin(th) + cur_ori[:, :, 1] * np.cos(th)
         # get shift value
-        s = batch[self.args.obs_length - 1]
+        s = batch[self.args.obs_length - 1, :, :-1]
 
         shift_value = np.repeat(s.reshape((1, -1, 2)), self.args.seq_length, 0)
 
-        batch_data = batch, batch - shift_value, shift_value, seq_list, nei_list, nei_num, batch_pednum
+        batch_shifted = batch.copy()
+        batch_shifted[:, :, :-1] = batch_shifted[:, :, :-1] - shift_value
+
+        batch_data = batch, batch_shifted, shift_value, seq_list, nei_list, nei_num, batch_pednum
         return batch_data
 
     def get_train_batch(self, idx):

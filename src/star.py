@@ -309,8 +309,8 @@ class STAR(torch.nn.Module):
         self.temporal_encoder_2 = TransformerEncoder(self.temporal_encoder_layer, 1)
 
         # Linear layer to map input to embedding
-        self.input_embedding_layer_temporal = nn.Linear(2, 32)
-        self.input_embedding_layer_spatial = nn.Linear(2, 32)
+        self.input_embedding_layer_temporal = nn.Linear(3, 32)
+        self.input_embedding_layer_spatial = nn.Linear(3, 32)
 
         # Linear layer to output and fusion
         self.output_layer = nn.Linear(48, 2)
