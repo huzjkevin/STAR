@@ -309,12 +309,15 @@ class STAR(torch.nn.Module):
         self.temporal_encoder_2 = TransformerEncoder(self.temporal_encoder_layer, 1)
 
         # Linear layer to map input to embedding
-        self.input_embedding_layer_temporal = nn.Linear(3, 32)
-        self.input_embedding_layer_spatial = nn.Linear(3, 32)
+        self.input_embedding_layer_temporal = nn.Linear(2, 32)
+        self.input_embedding_layer_spatial = nn.Linear(2, 32)
 
         # Linear layer to output and fusion
         self.output_layer = nn.Linear(48, 2)
         self.fusion_layer = nn.Linear(64, 32)
+
+        # Linear layer for classification
+        self.cls_layer = nn.Linear(32, 3)
 
         # ReLU and dropout init
         self.relu = nn.ReLU()
@@ -407,6 +410,7 @@ class STAR(torch.nn.Module):
         num_Ped = nodes_norm.shape[1]
 
         outputs = torch.zeros(nodes_norm.shape[0], num_Ped, 2).cuda()
+        cls_scores = torch.zeros(nodes_norm.shape[0], num_Ped, 3).cuda()
         GM = torch.zeros(nodes_norm.shape[0], num_Ped, 32).cuda()
 
         noise = get_noise((1, 16), 'gaussian')
@@ -464,10 +468,12 @@ class STAR(torch.nn.Module):
             temporal_input_embedded = torch.cat((temporal_input_embedded, spatial_input_embedded), dim=0)
             temporal_input_embedded = self.temporal_encoder_2(temporal_input_embedded)[-1]
 
+            cls_scores[framenum, node_index] = self.cls_layer(temporal_input_embedded)
+
             noise_to_cat = noise.repeat(temporal_input_embedded.shape[0], 1)
             temporal_input_embedded_wnoise = torch.cat((temporal_input_embedded, noise_to_cat), dim=1)
             outputs_current = self.output_layer(temporal_input_embedded_wnoise)
             outputs[framenum, node_index] = outputs_current
             GM[framenum, node_index] = temporal_input_embedded
 
-        return outputs
+        return outputs, cls_scores.mean(dim=0)

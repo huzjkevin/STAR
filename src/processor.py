@@ -89,6 +89,7 @@ class processor(object):
             torch.optim.Adam(self.net.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9),
         )
         self.criterion = nn.MSELoss(reduction="none")
+        self.cross_entropy = nn.CrossEntropyLoss()
 
     def test(self):
 
@@ -183,6 +184,11 @@ class processor(object):
                 nei_num,
                 batch_pednum,
             ) = inputs
+
+            cls_labels = torch.tensor(batch_abs[0, :, -1], dtype=torch.long).cuda()
+            batch_abs = batch_abs[:, :, :-1]
+            batch_norm = batch_norm[:, :, :-1]
+
             inputs_forward = (
                 batch_abs[:-1],
                 batch_norm[:-1],
@@ -195,14 +201,14 @@ class processor(object):
 
             self.net.zero_grad()
 
-            outputs = self.net.forward(inputs_forward, iftest=False)
+            outputs, cls_scores = self.net.forward(inputs_forward, iftest=False)
 
             lossmask, num = getLossMask(
                 outputs, seq_list[0], seq_list[1:], using_cuda=self.args.using_cuda
             )
             loss_o = torch.sum(self.criterion(outputs, batch_norm[1:, :, :2]), dim=2)
-
-            loss += torch.sum(loss_o * lossmask / num)
+            loss_cls = self.cross_entropy(cls_scores, cls_labels)
+            loss += torch.sum(loss_o * lossmask / num) + loss_cls
             loss_epoch += loss.item()
 
             loss.backward()
@@ -254,6 +260,9 @@ class processor(object):
                 batch_pednum,
             ) = inputs
 
+            batch_abs = batch_abs[:, :, :-1]
+            batch_norm = batch_norm[:, :, :-1]
+
             inputs_forward = (
                 batch_abs[:-1],
                 batch_norm[:-1],
@@ -266,7 +275,7 @@ class processor(object):
 
             all_output = []
             for i in range(self.args.sample_num):
-                outputs_infer = self.net.forward(inputs_forward, iftest=True)
+                outputs_infer, _ = self.net.forward(inputs_forward, iftest=True)
                 all_output.append(outputs_infer)
             self.net.zero_grad()
 
