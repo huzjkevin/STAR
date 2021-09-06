@@ -3,7 +3,13 @@ import ast
 import os
 
 import torch
+import datetime
+import logging
+import random
 import yaml
+import numpy as np
+
+from torch.utils.tensorboard import SummaryWriter
 
 from src.processor import processor
 
@@ -79,24 +85,76 @@ def save_arg(args):
         yaml.dump(arg_dict, f)
 
 
+def set_logger(log_path):
+    """Set the logger to log info in terminal and file `log_path`.
+    In general, it is useful to have a logger so that every output to the terminal is saved
+    in a permanent file. Here we save it to `model_dir/train.log`.
+    Example:
+    ```
+    logging.info("Starting training...")
+    ```
+    Args:
+        log_path: (string) where to log
+    """
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    if not logger.handlers:
+        # Logging to a file
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s:%(levelname)s: %(message)s")
+        )
+        logger.addHandler(file_handler)
+
+        # Logging to console
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(stream_handler)
+
+
 if __name__ == '__main__':
     parser = get_parser()
     p = parser.parse_args()
 
-    p.save_dir = p.save_base_dir + str(p.test_set) + '/'
-    p.model_dir = p.save_base_dir + str(p.test_set) + '/' + p.train_model + '/'
-    p.config = p.model_dir + '/config_' + p.phase + '.yaml'
+    curr_time = datetime.datetime.now()
+    output_dir = f"exp_{p.test_set}_{curr_time.strftime('%Y%m%d%H%M%S')}"
+    os.makedirs(output_dir, exist_ok=True)
 
-    if not load_arg(p):
-        save_arg(p)
+    checkpoint_dir = os.path.join(output_dir, f"IndividualTF_ckpts")
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
-    args = load_arg(p)
+    model_output_dir = os.path.join(output_dir, f"IndividualTF_outputs")
+    os.makedirs(model_output_dir, exist_ok=True)
+
+    # keep track of console outputs and experiment settings
+    set_logger(os.path.join(output_dir, f"train_{p.test_set}.log"))
+    config_file = open(
+        os.path.join(output_dir, f"config_{p.test_set}.yaml"), "w"
+    )
+    yaml.dump(p, config_file)
+    tensorboard_dir = os.path.join(output_dir, "tensorboard")
+    logger = SummaryWriter(tensorboard_dir)
+
+    seed = 72
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    p.save_dir = output_dir
+    p.model_dir = checkpoint_dir
+    # p.config = p.model_dir + '/config_' + p.phase + '.yaml'
+
+    # if not load_arg(p):
+        # save_arg(p)
+
+    # args = load_arg(p)
 
     torch.cuda.set_device(0)
 
-    trainer = processor(args)
+    trainer = processor(p, logger)
 
-    if args.phase == 'test':
+    if p.phase == 'test':
         trainer.test()
     else:
         trainer.train()

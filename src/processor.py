@@ -7,11 +7,13 @@ from .utils import *
 from tqdm import tqdm
 from .noam_opt import NoamOpt
 
+import logging
 
 class processor(object):
-    def __init__(self, args):
+    def __init__(self, args, logger=None):
 
         self.args = args
+        self.logger = logger
 
         self.dataloader = Trajectory_Dataloader(args)
         self.net = STAR(args)
@@ -40,9 +42,7 @@ class processor(object):
     def save_model(self, epoch):
 
         model_path = (
-            self.args.save_dir
-            + "/"
-            + self.args.train_model
+            self.args.model_dir
             + "/"
             + self.args.train_model
             + "_"
@@ -71,13 +71,13 @@ class processor(object):
                 + str(self.args.load_model)
                 + ".tar"
             )
-            print(self.args.model_save_path)
+            logging.info(self.args.model_save_path)
             if os.path.isfile(self.args.model_save_path):
-                print("Loading checkpoint")
+                logging.info("Loading checkpoint")
                 checkpoint = torch.load(self.args.model_save_path)
                 model_epoch = checkpoint["epoch"]
                 self.net.load_state_dict(checkpoint["state_dict"])
-                print("Loaded checkpoint at epoch", model_epoch)
+                logging.info("Loaded checkpoint at epoch", model_epoch)
 
     def set_optimizer(self):
 
@@ -92,11 +92,11 @@ class processor(object):
 
     def test(self):
 
-        print("Testing begin")
+        logging.info("Testing begin")
         self.load_model()
         self.net.eval()
         test_error, test_final_error = self.test_epoch()
-        print(
+        logging.info(
             "Set: {}, epoch: {},test_error: {} test_final_error: {}".format(
                 self.args.test_set, self.args.load_model, test_error, test_final_error
             )
@@ -104,7 +104,7 @@ class processor(object):
 
     def train(self):
 
-        print("Training begin")
+        logging.info("Training begin")
         test_error, test_final_error = 0, 0
         for epoch in range(self.args.num_epochs):
 
@@ -125,7 +125,9 @@ class processor(object):
                     if test_final_error < self.best_fde
                     else self.best_fde
                 )
-                self.save_model(epoch)
+
+                if self.best_epoch == epoch:
+                    self.save_model(epoch)
 
             self.log_file_curve.write(
                 str(epoch)
@@ -140,6 +142,10 @@ class processor(object):
                 + "\n"
             )
 
+            self.logger.add_scalar("train/train_loss", train_loss, epoch)
+            self.logger.add_scalar("val/ADE", test_error, epoch)
+            self.logger.add_scalar("val/FDE", test_final_error, epoch)
+
             if epoch % 10 == 0:
                 self.log_file_curve.close()
                 self.log_file_curve = open(
@@ -147,7 +153,7 @@ class processor(object):
                 )
 
             if epoch >= self.args.start_test:
-                print(
+                logging.info(
                     "----epoch {}, train_loss={:.5f}, ADE={:.3f}, FDE={:.3f}, Best_ADE={:.3f}, Best_FDE={:.3f} at Epoch {}".format(
                         epoch,
                         train_loss,
@@ -159,7 +165,7 @@ class processor(object):
                     )
                 )
             else:
-                print("----epoch {}, train_loss={:.5f}".format(epoch, train_loss))
+                logging.info("----epoch {}, train_loss={:.5f}".format(epoch, train_loss))
 
     def train_epoch(self, epoch):
 
@@ -214,7 +220,7 @@ class processor(object):
             end = time.time()
 
             if batch % self.args.show_step == 0 and self.args.ifshow_detail:
-                print(
+                logging.info(
                     "train-{}/{} (epoch {}), train_loss = {:.5f}, time/batch = {:.5f} ".format(
                         batch,
                         self.dataloader.trainbatchnums,
